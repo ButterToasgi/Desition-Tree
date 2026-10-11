@@ -457,49 +457,93 @@ top5_result = evaluate_model(
 
 
 # ============================================================
-# 9. 比較結果表
+# 9. 模型比較表：完整指標數據
 # ============================================================
 
+# 取得測試集上的 Precision、Recall、F1
+all_precision = precision_score(
+    y_test, all_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+all_recall = recall_score(
+    y_test, all_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+all_f1_test = f1_score(
+    y_test, all_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+
+top5_precision = precision_score(
+    y_test, top5_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+top5_recall = recall_score(
+    y_test, top5_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+top5_f1_test = f1_score(
+    y_test, top5_result["pred"],
+    pos_label=POSITIVE_CLASS,
+    zero_division=0
+)
+
+# 建立比較表
 comparison_df = pd.DataFrame([
     {
-        "Model": all_result["Model"],
+        "Model": "全特徵模型",
         "Feature_Count": X_train.shape[1],
         "CV_Mean_F1": all_search.best_score_,
         "Test_Accuracy": all_result["Accuracy"],
+        "Test_Precision": all_precision,
+        "Test_Recall": all_recall,
+        "Test_F1": all_f1_test,
         "Test_ROC_AUC": all_result["ROC_AUC"],
         "Test_AP": all_result["AP"]
     },
     {
-        "Model": top5_result["Model"],
+        "Model": "前五重要特徵模型",
         "Feature_Count": len(top5_features),
         "CV_Mean_F1": top5_search.best_score_,
         "Test_Accuracy": top5_result["Accuracy"],
+        "Test_Precision": top5_precision,
+        "Test_Recall": top5_recall,
+        "Test_F1": top5_f1_test,
         "Test_ROC_AUC": top5_result["ROC_AUC"],
         "Test_AP": top5_result["AP"]
     }
 ])
 
-print("\n" + "=" * 75)
-print("兩種模型比較")
-print("=" * 75)
+print("\n" + "=" * 110)
+print("模型比較")
+print("=" * 110)
 
-comparison_display_df = comparison_df.rename(columns={
-    "Model": "模型",
-    "Feature_Count": "特徵數",
-    "CV_Mean_F1": "CV 平均 F1",
-    "Test_Accuracy": "測試 Accuracy",
-    "Test_ROC_AUC": "測試 ROC-AUC",
-    "Test_AP": "測試 AP",
-})
+print(
+    comparison_df.to_string(
+        index=False,
+        formatters={
+            col: "{:.4f}".format
+            for col in comparison_df.select_dtypes(
+                include="number"
+            ).columns
+        }
+    )
+)
 
-# 確保數值有格式化好
-formatted_df = comparison_display_df.copy()
-for col in ["CV 平均 F1", "測試 Accuracy", "測試 ROC-AUC", "測試 AP"]:
-  if col in formatted_df.columns:
-    formatted_df[col] = formatted_df[col].map("{:.4f}".format)
+# 儲存比較表為 CSV
+comparison_df.to_csv(
+    OUTPUT_DIR / "Model_Comparison.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
 
-# 使用 markdown 格式輸出，對齊中英文
-print(formatted_df.to_markdown(index=False))
+print(f"\n比較表已儲存至：{OUTPUT_DIR / 'Model_Comparison.csv'}")
+
 
 
 # ============================================================
