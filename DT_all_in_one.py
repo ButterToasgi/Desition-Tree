@@ -1,6 +1,8 @@
-# Decision Tree：全特徵模型 vs 前五重要特徵模型
+#自動判斷二元或多元分類
+
+#Decision Tree：全特徵模型 vs 前五重要特徵模型
 # 功能：
-# 1. 載入 ParkinsonsDNN.csv，進行資料檢查與前處理
+# 1. 載入 diabetes012.csv，進行資料檢查與前處理
 # 2. 分割訓練集與測試集
 # 3. 使用全特徵建立決策樹，透過 Grid Search 與 5 折交叉驗證尋找最佳參數組合
 # 4. 根據全特徵最佳模型的 Feature Importance，排序並顯示所有特徵的重要性
@@ -18,6 +20,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+# 設定中文字型（Windows）
+plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei']
+
+# 避免負號顯示異常
+plt.rcParams['axes.unicode_minus'] = False
 
 from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
 from sklearn.feature_selection import SelectFromModel
@@ -104,22 +112,26 @@ if all_missing_features:
 if y.isnull().any():
     raise ValueError(f"目標欄位 {TARGET!r} 包含缺失值，無法訓練分類模型。")
 
-class_order = list(pd.unique(y))
-if len(class_order) != 2:
+# 自動取得所有類別，支援二元與三類以上的多元分類。
+class_order = sorted(pd.unique(y).tolist())
+n_classes = len(class_order)
+
+if n_classes < 2:
     raise ValueError(
-        f"目標欄位 {TARGET!r} 必須恰有兩個類別，目前為：{class_order}"
+        f"目標欄位 {TARGET!r} 至少需要兩個類別，目前為：{class_order}"
     )
 
-if POSITIVE_CLASS not in class_order:
-    raise ValueError(
-        f"POSITIVE_CLASS={POSITIVE_CLASS!r} 不在目標欄位 {TARGET!r} 的類別中："
-        f"{class_order}"
-    )
+# POSITIVE_CLASS 僅用於二元分類的 ROC / PRC。
+# 若二元資料的標籤不是預設的 1，便自動使用排序後的最後一類。
+if n_classes == 2 and POSITIVE_CLASS not in class_order:
+    POSITIVE_CLASS = class_order[-1]
+    print(f"指定正類不存在，二元分類改用 {POSITIVE_CLASS!r} 作為正類。")
 
-# 將正類固定放在第二位，供混淆矩陣與報告使用。
-class_order = [
-    label for label in class_order if label != POSITIVE_CLASS
-] + [POSITIVE_CLASS]
+if n_classes == 2:
+    # 二元分類：將正類固定放在第二位。
+    class_order = [
+        label for label in class_order if label != POSITIVE_CLASS
+    ] + [POSITIVE_CLASS]
 
 if y.value_counts().min() < CV_FOLDS:
     raise ValueError(
@@ -207,16 +219,17 @@ def run_grid_search(X_tr, y_tr, model_name, estimator):
     print(f"{model_name}：開始 Grid Search + 5 折交叉驗證")
     print("=" * 70)
 
+    # Macro 平均讓每個類別權重相同，同時支援二元與多元分類。
     scoring = {
         "accuracy": "accuracy",
         "precision": make_scorer(
-            precision_score, pos_label=POSITIVE_CLASS, zero_division=0
+            precision_score, average="macro", zero_division=0
         ),
         "recall": make_scorer(
-            recall_score, pos_label=POSITIVE_CLASS, zero_division=0
+            recall_score, average="macro", zero_division=0
         ),
         "f1": make_scorer(
-            f1_score, pos_label=POSITIVE_CLASS, zero_division=0
+            f1_score, average="macro", zero_division=0
         )
     }
 
@@ -376,33 +389,39 @@ print(selector_importance_df.to_string(index=False))
 # ============================================================
 
 def evaluate_model(model, X_te, y_te, model_name):
-    """輸出分類指標，並回傳 ROC、PRC 所需資料。"""
+    """評估二元或多元分類，並回傳比較表與 ROC / PRC 所需資料。"""
+    from sklearn.preprocessing import label_binarize
 
     pred = model.predict(X_te)
-
-    # 取得設定之正類的預測機率
-    positive_index = list(model.classes_).index(POSITIVE_CLASS)
-    pred_prob = model.predict_proba(X_te)[:, positive_index]
+    classes = list(model.classes_)
+    pred_prob_all = model.predict_proba(X_te)
 
     accuracy = accuracy_score(y_te, pred)
-    cm = confusion_matrix(y_te, pred, labels=class_order)
-
-    y_binary = (y_te == POSITIVE_CLASS).astype(int)
-    auc = roc_auc_score(y_binary, pred_prob)
-    ap = average_precision_score(
-        y_binary,
-        pred_prob
+    precision_score_value = precision_score(
+        y_te, pred, average="macro", zero_division=0
     )
+    recall_score_value = recall_score(
+        y_te, pred, average="macro", zero_division=0
+    )
+    f1_score_value = f1_score(
+        y_te, pred, average="macro", zero_division=0
+    )
+    cm = confusion_matrix(y_te, pred, labels=class_order)
 
     print("\n" + "=" * 60)
     print(model_name)
     print("=" * 60)
-
-    print(f"ROC AUC ：{auc:.4f}")
-    print(f"AP      ：{ap:.4f}")
+    print(f"Accuracy        ：{accuracy:.4f}")
+    print(f"Precision Macro ：{precision_score_value:.4f}")
+    print(f"Recall Macro    ：{recall_score_value:.4f}")
+    print(f"F1 Macro        ：{f1_score_value:.4f}")
 
     print("\nConfusion Matrix：")
-    print(cm)
+    print(pd.DataFrame(
+        cm,
+        index=[f"實際 {label}" for label in class_order],
+        columns=[f"預測 {label}" for label in class_order]
+    ))
 
     print("\nClassification Report：")
     print(classification_report(
@@ -413,29 +432,74 @@ def evaluate_model(model, X_te, y_te, model_name):
         zero_division=0
     ))
 
-    fpr, tpr, _ = roc_curve(
-        y_binary,
-        pred_prob,
-        pos_label=1
-    )
+    if len(classes) == 2:
+        # 二元分類：以指定正類計算 ROC-AUC、AP 與曲線。
+        positive_index = classes.index(POSITIVE_CLASS)
+        pred_prob = pred_prob_all[:, positive_index]
+        y_binary = (np.asarray(y_te) == POSITIVE_CLASS).astype(int)
 
-    precision, recall, _ = precision_recall_curve(
-        y_binary,
-        pred_prob
-    )
+        auc = roc_auc_score(y_binary, pred_prob)
+        ap = average_precision_score(y_binary, pred_prob)
+        fpr, tpr, _ = roc_curve(y_binary, pred_prob)
+        precision_curve, recall_curve, _ = precision_recall_curve(
+            y_binary, pred_prob
+        )
+        auc_curve = auc
+        ap_curve = ap
+        curve_description = f"正類 {POSITIVE_CLASS!r}"
+
+    else:
+        # 多元分類：整體指標採 Macro OvR；圖表採 Micro-average 曲線。
+        y_binary = label_binarize(y_te, classes=classes)
+
+        auc = roc_auc_score(
+            y_te,
+            pred_prob_all,
+            labels=classes,
+            multi_class="ovr",
+            average="macro"
+        )
+        ap = average_precision_score(
+            y_binary, pred_prob_all, average="macro"
+        )
+
+        fpr, tpr, _ = roc_curve(
+            y_binary.ravel(), pred_prob_all.ravel()
+        )
+        precision_curve, recall_curve, _ = precision_recall_curve(
+            y_binary.ravel(), pred_prob_all.ravel()
+        )
+        auc_curve = roc_auc_score(
+            y_binary.ravel(), pred_prob_all.ravel()
+        )
+        ap_curve = average_precision_score(
+            y_binary, pred_prob_all, average="micro"
+        )
+        curve_description = "Micro-average"
+
+    print(f"ROC-AUC (整體) ：{auc:.4f}")
+    print(f"AP (整體)      ：{ap:.4f}")
+    if len(classes) > 2:
+        print("多元分類 ROC / PRC 圖表使用 Micro-average 曲線。")
 
     return {
         "Model": model_name,
         "Accuracy": accuracy,
+        "Precision": precision_score_value,
+        "Recall": recall_score_value,
+        "F1": f1_score_value,
         "ROC_AUC": auc,
         "AP": ap,
+        "ROC_AUC_Curve": auc_curve,
+        "AP_Curve": ap_curve,
+        "Curve_Description": curve_description,
         "Confusion_Matrix": cm,
         "fpr": fpr,
         "tpr": tpr,
-        "precision": precision,
-        "recall": recall,
+        "precision": precision_curve,
+        "recall": recall_curve,
         "pred": pred,
-        "pred_prob": pred_prob
+        "pred_prob": pred_prob_all
     }
 
 
@@ -457,96 +521,55 @@ top5_result = evaluate_model(
 
 
 # ============================================================
-# 9. 模型比較表：完整指標數據
+# 9. 模型比較表：二元與多元分類皆使用 Macro 指標
 # ============================================================
 
-# 取得測試集上的 Precision、Recall、F1
-all_precision = precision_score(
-    y_test, all_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-all_recall = recall_score(
-    y_test, all_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-all_f1_test = f1_score(
-    y_test, all_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-
-top5_precision = precision_score(
-    y_test, top5_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-top5_recall = recall_score(
-    y_test, top5_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-top5_f1_test = f1_score(
-    y_test, top5_result["pred"],
-    pos_label=POSITIVE_CLASS,
-    zero_division=0
-)
-
-# 建立比較表
 comparison_df = pd.DataFrame([
     {
         "Model": "全特徵模型",
         "Feature_Count": X_train.shape[1],
-        "CV_Mean_F1": all_search.best_score_,
+        "CV_Mean_F1_Macro": all_search.best_score_,
         "Test_Accuracy": all_result["Accuracy"],
-        "Test_Precision": all_precision,
-        "Test_Recall": all_recall,
-        "Test_F1": all_f1_test,
+        "Test_Precision_Macro": all_result["Precision"],
+        "Test_Recall_Macro": all_result["Recall"],
+        "Test_F1_Macro": all_result["F1"],
         "Test_ROC_AUC": all_result["ROC_AUC"],
         "Test_AP": all_result["AP"]
     },
     {
         "Model": "前五重要特徵模型",
         "Feature_Count": len(top5_features),
-        "CV_Mean_F1": top5_search.best_score_,
+        "CV_Mean_F1_Macro": top5_search.best_score_,
         "Test_Accuracy": top5_result["Accuracy"],
-        "Test_Precision": top5_precision,
-        "Test_Recall": top5_recall,
-        "Test_F1": top5_f1_test,
+        "Test_Precision_Macro": top5_result["Precision"],
+        "Test_Recall_Macro": top5_result["Recall"],
+        "Test_F1_Macro": top5_result["F1"],
         "Test_ROC_AUC": top5_result["ROC_AUC"],
         "Test_AP": top5_result["AP"]
     }
 ])
 
-print("\n" + "=" * 110)
-print("模型比較")
-print("=" * 110)
+print("\n" + "=" * 75)
+print("模型比較（Precision / Recall / F1 使用 Macro 平均）")
+print("=" * 75)
 
-print(
-    comparison_df.to_string(
-        index=False,
-        formatters={
-            col: "{:.4f}".format
-            for col in comparison_df.select_dtypes(
-                include="number"
-            ).columns
-        }
-    )
-)
+formatters = {
+    col: "{:.4f}".format
+    for col in comparison_df.select_dtypes(include="number").columns
+    if col != "Feature_Count"
+}
+formatters["Feature_Count"] = "{:.0f}".format
 
-# 儲存比較表為 CSV
+print(comparison_df.to_string(index=False, formatters=formatters))
+
 comparison_df.to_csv(
     OUTPUT_DIR / "Model_Comparison.csv",
     index=False,
     encoding="utf-8-sig"
 )
-
 print(f"\n比較表已儲存至：{OUTPUT_DIR / 'Model_Comparison.csv'}")
 
 
-
-# ============================================================
 # 10. 選擇最佳模型
 # ============================================================
 
@@ -575,7 +598,7 @@ joblib.dump(
         "model": best_pipeline,
         "feature_columns": list(X_train.columns),
         "target": TARGET,
-        "positive_class": POSITIVE_CLASS,
+        "positive_class": POSITIVE_CLASS if len(class_order) == 2 else None,
     },
     OUTPUT_DIR / "best_model.joblib"
 )
@@ -644,7 +667,7 @@ plt.figure(figsize=(8, 6))
 plt.plot(
     best_result["fpr"],
     best_result["tpr"],
-    label=f'{best_name} (AUC={best_result["ROC_AUC"]:.3f})'
+    label=f'{best_name} ({best_result["Curve_Description"]} AUC={best_result["ROC_AUC_Curve"]:.3f})'
 )
 
 plt.plot(
@@ -673,17 +696,18 @@ plt.close()
 # 13. PRC：只輸出最佳模型
 # ============================================================
 
-positive_rate = (y_test == POSITIVE_CLASS).mean()
+positive_rate = ((y_test == POSITIVE_CLASS).mean()
+                 if len(class_order) == 2 else 1 / len(class_order))
 
 plt.figure(figsize=(8, 6))
 
 plt.plot(
     best_result["recall"],
     best_result["precision"],
-    label=f'{best_name} (AP={best_result["AP"]:.3f})'
+    label=f'{best_name} ({best_result["Curve_Description"]} AP={best_result["AP_Curve"]:.3f})'
 )
 
-# 隨機分類器基準：測試集正類比例
+# 隨機分類器基準：二元分類為正類比例；多元 Micro PRC 約為 1 / 類別數
 plt.axhline(
     y=positive_rate,
     linestyle="--",
