@@ -24,6 +24,8 @@
   
     if col.lower() in [TARGET, "name"] 可增刪排除的欄位
 
+    (4. Grid Search 設定，參數有需也可改)
+
 4.執行，獲得模型與相關結果於DT_Results資料夾 (best_model.joblib為模型)
 
 **二、預測:**

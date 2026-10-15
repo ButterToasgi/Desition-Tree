@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_FILE = BASE_DIR / "DT_Results" / "best_model.joblib"
 
 # 手動指定要預測的案例 CSV；每列代表一個案例。
-INPUT_FILE = BASE_DIR / "datasets" / "new_cases.csv"
+INPUT_FILE = BASE_DIR / "datasets" / "ParkinsonsDNN_new_cases.csv"
 OUTPUT_FILE = BASE_DIR / "DT_Results" / "Predictions.csv"
 TEMPLATE_FILE = BASE_DIR / "datasets" / "new_cases_template.csv"
 
@@ -60,23 +60,39 @@ if missing_features:
 model_input = cases.loc[:, feature_columns]
 predictions = model.predict(model_input)
 
-positive_index = list(model.classes_).index(positive_class)
-positive_probabilities = model.predict_proba(model_input)[:, positive_index]
+# 預測類別
+predictions = model.predict(model_input)
+
+# 取得每筆案例屬於各類別的機率
+probabilities = model.predict_proba(model_input)
 
 results = cases.copy()
 results["Predicted_Class"] = predictions
-results["Positive_Probability"] = positive_probabilities
+
+# 自動輸出每個類別的預測機率
+for index, class_label in enumerate(model.classes_):
+    results[f"Probability_Class_{class_label}"] = probabilities[:, index]
+
+# 輸出 CSV
 results.to_csv(OUTPUT_FILE, index=False, encoding="utf-8-sig")
 
 print(f"已完成 {len(results)} 筆案例預測。")
 print(f"結果輸出位置：{OUTPUT_FILE}")
 print("\n預測結果：")
-print(
-    results[["Predicted_Class", "Positive_Probability"]]
-    .assign(
-        Positive_Probability=lambda frame: frame["Positive_Probability"].map(
-            lambda value: f"{value:.1%}"
-        )
+
+# 顯示預測類別與所有類別的機率（百分比）
+probability_columns = [
+    f"Probability_Class_{class_label}"
+    for class_label in model.classes_
+]
+
+display_results = results[
+    ["Predicted_Class"] + probability_columns
+].copy()
+
+for column in probability_columns:
+    display_results[column] = display_results[column].map(
+        lambda value: f"{value:.2%}"
     )
-    .to_string(index=False)
-)
+
+print(display_results.to_string(index=False))

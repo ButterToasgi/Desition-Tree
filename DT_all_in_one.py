@@ -177,7 +177,7 @@ if y_train.value_counts().min() < CV_FOLDS:
 tree_param_grid = {
     "criterion": ["gini", "entropy"],
     "max_depth": [3, 5, 7, 10, None],
-    "min_samples_leaf": [3, 5, 7, 9],
+    "min_samples_leaf": [3, 5, 7, 11, 31],
     "max_features": [None, "sqrt"],
     "ccp_alpha": [0.0, 0.001, 0.005, 0.01]
 }
@@ -526,24 +526,24 @@ top5_result = evaluate_model(
 
 comparison_df = pd.DataFrame([
     {
-        "Model": "全特徵模型",
+        "Model": "全特徵",
         "Feature_Count": X_train.shape[1],
-        "CV_Mean_F1_Macro": all_search.best_score_,
+        "CV_Mean_F1": all_search.best_score_,
         "Test_Accuracy": all_result["Accuracy"],
-        "Test_Precision_Macro": all_result["Precision"],
-        "Test_Recall_Macro": all_result["Recall"],
-        "Test_F1_Macro": all_result["F1"],
+        "Test_Precision": all_result["Precision"],
+        "Test_Recall": all_result["Recall"],
+        "Test_F1": all_result["F1"],
         "Test_ROC_AUC": all_result["ROC_AUC"],
         "Test_AP": all_result["AP"]
     },
     {
-        "Model": "前五重要特徵模型",
+        "Model": "前五重要特徵",
         "Feature_Count": len(top5_features),
-        "CV_Mean_F1_Macro": top5_search.best_score_,
+        "CV_Mean_F1": top5_search.best_score_,
         "Test_Accuracy": top5_result["Accuracy"],
-        "Test_Precision_Macro": top5_result["Precision"],
-        "Test_Recall_Macro": top5_result["Recall"],
-        "Test_F1_Macro": top5_result["F1"],
+        "Test_Precision": top5_result["Precision"],
+        "Test_Recall": top5_result["Recall"],
+        "Test_F1": top5_result["F1"],
         "Test_ROC_AUC": top5_result["ROC_AUC"],
         "Test_AP": top5_result["AP"]
     }
@@ -560,8 +560,17 @@ formatters = {
 }
 formatters["Feature_Count"] = "{:.0f}".format
 
-print(comparison_df.to_string(index=False, formatters=formatters))
+from tabulate import tabulate
 
+print(tabulate(
+    comparison_df,
+    headers="keys",
+    tablefmt="grid",
+    showindex=False,
+    floatfmt=".4f"
+))
+
+# 儲存比較表為 CSV
 comparison_df.to_csv(
     OUTPUT_DIR / "Model_Comparison.csv",
     index=False,
