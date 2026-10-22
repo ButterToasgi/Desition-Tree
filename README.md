@@ -2,10 +2,11 @@
 訓練model、預測
 
 輸入各項特徵數值(x/Features)，輸出預測結果(y/TARGET)
+可將特徵文字轉數值
 
 **一、訓練:**
 
-  1.將要訓練的資料(.csv，可從https://www.kaggle.com/找)放到dataset資料夾
+  1.將要訓練的資料(.csv，可從https://www.kaggle.com 找)放到dataset資料夾
 
   2.打開DT_all_in_one.py
 
