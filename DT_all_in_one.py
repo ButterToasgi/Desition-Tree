@@ -57,7 +57,7 @@ from sklearn.metrics import (
 start_time = time.time()
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "datasets" / "ParkinsonsDNN.csv"
+DATA_FILE = BASE_DIR / "datasets" / "ParkinsonsDNN.csvv"
 OUTPUT_DIR = BASE_DIR / "DT_Results"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,10 +66,10 @@ RANDOM_STATE = 42
 CV_FOLDS = 5
 TOP_N_FEATURES = 5
 
-TARGET = "status" #陰性陽性
+TARGET = "status" #要判斷的結果
 
-# 正類：請設定為 TARGET 欄位中的其中一個值
-POSITIVE_CLASS = 1
+# TARGET如為二元，正類設為TARGET欄位中的其中一個值
+POSITIVE_CLASS = "1"
 
 
 # ============================================================
@@ -84,7 +84,7 @@ if TARGET not in df.columns:
 # 排除目標欄位、姓名及多餘的索引欄
 exclude_cols = [
     col for col in df.columns
-    if col.lower() in [TARGET, "name"]
+    if col in [TARGET, "name", "Student_ID"]
     or col.lower().startswith("unnamed:")
 ]
 
@@ -93,6 +93,10 @@ y = df[TARGET]
 
 # One-Hot Encoding將類別型文字轉成數值
 X = pd.get_dummies(X, dtype=int)
+
+# 將所有布林型態的特徵轉成整數
+bool_cols = X.select_dtypes(include=["bool"]).columns
+X[bool_cols] = X[bool_cols].astype(int)
 
 # 確認所有特徵都是數值型態
 non_numeric = X.select_dtypes(exclude=np.number).columns.tolist()
@@ -164,7 +168,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     stratify=y
 )
 
-print("\n訓練集筆數：", len(X_train))
+n_samples = len(X_train)
+print("\n訓練集筆數：", n_samples)
 print("測試集筆數：", len(X_test))
 
 if y_train.value_counts().min() < CV_FOLDS:
@@ -175,11 +180,20 @@ if y_train.value_counts().min() < CV_FOLDS:
 # ============================================================
 # 4. Grid Search 設定+ 交叉驗證
 # ============================================================
+leaf_ratios = [0.005, 0.01, 0.02, 0.05, 0.10]
+split_ratios = [0.01, 0.02, 0.05, 0.10, 0.15]
+min_samples_leaf_list = sorted(
+    list({max(2, int(n_samples * r)) for r in leaf_ratios})
+)
+min_samples_split_list = sorted(
+    list({max(4, int(n_samples * r)) for r in split_ratios})
+)
 
 tree_param_grid = {
     "criterion": ["gini", "entropy"],
-    "max_depth": [3, 5, 7, 10, None],
-    "min_samples_leaf": [3, 5, 7, 11, 31],
+    "max_depth": [3, 5, 7, None],
+    "min_samples_leaf": min_samples_leaf_list,
+    "min_samples_split": min_samples_split_list,
     "max_features": [None, "sqrt"],
     "ccp_alpha": [0.0, 0.001, 0.005, 0.01]
 }
@@ -625,9 +639,9 @@ def save_tree_outputs(model, feature_names, prefix):
     # 依實際樹大小決定畫布，避免小樹被過寬的留白拉開。
     leaf_count = model.tree_.n_leaves
     tree_depth = model.tree_.max_depth
-    figure_width = max(12, min(18, leaf_count * 1.35))
-    figure_height = max(8, min(18, (tree_depth + 1) * 2.0))
-    font_size = 14 if leaf_count <= 8 else 12 if leaf_count <= 16 else 10
+    figure_width = max(12, leaf_count*1.5)
+    figure_height = max(8, (tree_depth + 1))
+    font_size = max(10, 12 - tree_depth)
 
     fig, ax = plt.subplots(figsize=(figure_width, figure_height))
 

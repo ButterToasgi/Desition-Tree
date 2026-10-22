@@ -2,7 +2,7 @@
 訓練model、預測
 
 輸入各項特徵數值(x/Features)，輸出預測結果(y/TARGET)
-可將特徵文字轉數值
+可將特徵文字、布林轉數值
 
 **一、訓練:**
 
@@ -23,7 +23,7 @@
   
     (2. 讀取資料與前處理)
   
-    if col.lower() in [TARGET, "name"] 可增刪排除的欄位
+    if col in [TARGET, "name", "Student_ID"] 可增刪排除的欄位
 
     (4. Grid Search 設定，參數有需也可改)
 
@@ -31,7 +31,7 @@
 
 **二、預測:**
 
-1.將要預測的資料(.csv)放到dataset資料夾(可不含TARGET)
+1.將要預測的新資料(.csv)放到dataset資料夾(可不含TARGET)
 
 2.手動指定INPUT_FILE最後"new_cases.csv"改成你的資料檔名 (或把檔名改成new_cases.csv)
 
