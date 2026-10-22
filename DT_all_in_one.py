@@ -50,7 +50,6 @@ from sklearn.metrics import (
     make_scorer
 )
 
-
 # ============================================================
 # 1. 基本設定 check
 # ============================================================
@@ -91,6 +90,9 @@ exclude_cols = [
 
 X = df.drop(columns=exclude_cols)
 y = df[TARGET]
+
+# One-Hot Encoding將類別型文字轉成數值
+X = pd.get_dummies(X, dtype=int)
 
 # 確認所有特徵都是數值型態
 non_numeric = X.select_dtypes(exclude=np.number).columns.tolist()

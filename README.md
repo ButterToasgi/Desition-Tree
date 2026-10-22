@@ -5,7 +5,7 @@
 
 **一、訓練:**
 
-  1.將要訓練的資料(.csv)放到dataset資料夾
+  1.將要訓練的資料(.csv，可從https://www.kaggle.com/找)放到dataset資料夾
 
   2.打開DT_all_in_one.py
 
