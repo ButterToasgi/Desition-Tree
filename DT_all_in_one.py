@@ -57,7 +57,7 @@ from sklearn.metrics import (
 start_time = time.time()
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "datasets" / "ParkinsonsDNN.csvv"
+DATA_FILE = BASE_DIR / "datasets" / "ParkinsonsDNN.csv"
 OUTPUT_DIR = BASE_DIR / "DT_Results"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
